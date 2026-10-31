@@ -1,0 +1,24 @@
+{
+  "goal": "根据页面声明，核对 App 未成年人模式的每日使用时长限制和禁止使用时段是否有对应的客户端实现及调用关系。只做静态一致性核对，不证明运行时有效或法律合规。",
+  "output_dir": "../results/checks",
+  "api_timeout": 300,
+  "max_seconds": 3600,
+  "max_model_calls": 100,
+  "max_tool_calls": 400,
+  "max_images": 80,
+  "max_tool_chars": 14000,
+  "max_search_classes": 5000,
+  "max_context_chars": 2500000,
+  "thinking": "enabled",
+  "reasoning_effort": "high",
+  "jadx": {
+    "ssh_host": "safe",
+    "remote_mcp_port": 8651,
+    "remote_apk_state_file": "/home/cxy/MinorGuard/runtime/run/current_apk.txt",
+    "managed_root": "/home/cxy/MinorGuard",
+    "timeout": 180,
+    "ready_timeout": 600,
+    "reparse_timeout": 600,
+    "heap_gb": 32
+  }
+}

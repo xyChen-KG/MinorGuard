@@ -1,0 +1,38 @@
+{
+  "package": "tv.danmaku.bili",
+  "goal": "在 App 中寻找并采集未成年人模式的使用时长、使用时段限制相关规则或设置页面，并保留进入这些页面的操作路径。这里只收集证据，不验证计时是否实际生效。",
+  "evidence": [
+    "未成年人模式的入口或模式状态页面",
+    "明确说明或设置使用时长限制的页面",
+    "明确说明或设置允许/禁止使用时段的页面"
+  ],
+  "adb_path": "../tools/platform-tools/adb",
+  "serial": "",
+  "output_dir": "../results/collections",
+  "max_steps": 60,
+  "max_seconds": 600,
+  "history_limit": 10,
+  "settle_seconds": 0.8,
+  "wait_seconds": 2,
+  "stability_checks": 2,
+  "stability_threshold": 2,
+  "jev": {
+    "endpoint": "https://api.typesafe.ai/v1/systemone",
+    "model": "jev-latest",
+    "timeout": 45
+  },
+  "recovery": {
+    "enabled": true,
+    "repeat_actions": 3,
+    "max_actions": 3,
+    "max_recoveries": 3,
+    "timeout": 45
+  },
+  "password": {
+    "enabled": true,
+    "timeout": 45,
+    "max_rounds": 8,
+    "allow_setup": true,
+    "existing_pin_is_all_ones": false
+  }
+}
