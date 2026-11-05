@@ -114,6 +114,7 @@ class ExitStaticAgent(LimitsAgent):
     def __init__(self, config, client, tools, recorder, metadata, entries):
         super().__init__(config, client, tools, recorder, metadata, images=[])
         self.entries = {entry["id"]: entry for entry in entries}
+        self.leads_reminded = False
 
     def run(self):
         compact = [{**{key: e[key] for key in ("id", "name", "target", "exported", "enabled", "permissions")},
@@ -125,6 +126,12 @@ class ExitStaticAgent(LimitsAgent):
     def _finish(self, value, budget_forced=False):
         if not isinstance(value, dict) or not isinstance(value.get("candidates"), list) or len(value["candidates"]) > 8:
             raise CollectorError("候选结果格式无效（最多 8 条）")
+        leads = list(self.tools.leads.values())
+        pending = [lead for lead in leads if lead["status"] == "pending"]
+        if pending and not budget_forced and not self.leads_reminded:
+            self.leads_reminded = True
+            raise CollectorError("还有未完成的重要线索：%s。请优先追查与状态修改和权限检查有关的线索；如果暂时无法查清，可以直接提交并说明缺口。" %
+                                 "、".join(lead["id"] + ":" + lead["target"][:80] for lead in pending))
         candidates, seen = [], set()
         for item in value["candidates"]:
             if not isinstance(item, dict) or not isinstance(item.get("entry_id"), str) or item["entry_id"] not in self.entries:
@@ -156,7 +163,7 @@ class ExitStaticAgent(LimitsAgent):
                                "replay_eligible": eligible, "validation": {"status": "pending", "reason": reason}})
         return {"status": "completed", "summary": clean_text(value.get("summary"), "summary", 2000),
                 "coverage": clean_text(value.get("coverage"), "coverage", 2000),
-                "limitations": parse_limitations(value.get("limitations")), "candidates": candidates}
+                "limitations": parse_limitations(value.get("limitations")), "leads": leads, "candidates": candidates}
 
 
 class StaticAnalysis:

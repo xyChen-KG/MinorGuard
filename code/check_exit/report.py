@@ -19,6 +19,8 @@ def render_static(result, heading="## 静态旁路分析"):
         source = "只分析输入 APK，未连接手机或复测" if result.get("input_source") == "local_apk" else "已与手机安装的 APK 核对"
         lines.extend(["%s · %s · %s。" % (clean(apk["package"]), clean(apk["version_name"]), source), ""])
     lines.extend(["**%s**。%s" % (labels[result["status"]], clean(result.get("summary", ""))), ""])
+    if result["status"] == "completed":
+        lines.extend(["以下调用链为模型根据源码提出的分析；代码只核对引文出处，不自动验证片段间的可达性。请结合局限和线索备注核对链路。", ""])
     if "entry_count" in result:
         lines.append("Manifest 共列出 %d 个入口，其中 %d 个进入本轮源码筛查范围。[入口清单](%s/entries.json)" % (
             result["entry_count"], result["selected_count"], directory))
@@ -26,6 +28,15 @@ def render_static(result, heading="## 静态旁路分析"):
         lines.extend(["", "覆盖范围：" + clean(result["coverage"])])
     if result.get("limitations"):
         lines.extend(["", "局限：" + "；".join(clean(value) for value in result["limitations"])])
+    leads = result.get("leads", [])
+    if leads:
+        lines.extend(["", "线索追踪（已查询表示已读取相关结果，具体缺口见备注）："])
+        labels = {"pending": "待追查", "checked": "已查询", "blocked": "受阻"}
+        for lead in leads:
+            refs = list(dict.fromkeys(lead[key] for key in ("source_id", "result_id") if lead.get(key)))
+            links = " ".join("[%s](%s/code_evidence/%s.txt)" % (clean(ref), directory, clean(ref)) for ref in refs)
+            lines.append("- %s（%s）：%s。%s %s" % (clean(lead["id"]), labels.get(lead.get("status"), "未知"),
+                         clean(lead["target"]), clean(lead.get("note", "")), links))
     candidates = result["candidates"]
     if candidates:
         statuses = {"pending": "待真机验证", "unknown": "复测证据不足", "bypass": "已复现绕过", "blocked": "已验证拦截"}

@@ -106,6 +106,21 @@ class StaticAnalysisTests(TestBase):
         self.assertEqual(saved["validation"]["status"], "pending")
         self.assertTrue((self.recorder.root / saved["code_evidence"][0]["file"]).is_file())
 
+    def test_pending_lead_gets_one_reminder_and_remains_in_report(self):
+        tools = Mock()
+        tools.leads = {"L1": {"id": "L1", "target": "检查状态修改的调用者", "status": "pending", "note": "尚未核对"}}
+        tools.evidence = {}
+        agent = ExitStaticAgent({}, Mock(), tools, self.recorder, {}, manifest_entries(MANIFEST))
+        final = {"summary": "没有确认候选", "coverage": "读取模式开关", "limitations": [], "candidates": []}
+        with self.assertRaisesRegex(CollectorError, "未完成的重要线索"):
+            agent._finish(final)
+        result = agent._finish(final)
+        self.assertEqual(result["leads"][0]["status"], "pending")
+        from check_exit.report import render_static
+        text = "\n".join(render_static({**result, "directory": "static/example"}))
+        self.assertIn("检查状态修改的调用者", text)
+        self.assertIn("待追查", text)
+
     def analysis(self, replay_uris=(URI,)):
         analysis = StaticAnalysis({}, self.backend, PACKAGE, "1", self.recorder.root, replay_uris=replay_uris)
         analysis.result.update(status="completed", apk={"sha256": "same-hash"}, candidates=[{
