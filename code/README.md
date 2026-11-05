@@ -1,6 +1,6 @@
-# 轻量 MinorGuard：图片采集与时长核对
+# 轻量 MinorGuard：未成年人模式检测
 
-两个独立入口：`collect_images` 用 Jev 操作 Android App、保存有顺序的截图；`check_limits` 用同一个视觉大模型读图、调用只读 JADX 工具核对客户端实现，输出简短报告。不包含旧版法规任务生成或多层审核工作流。
+`collect_images` 用 Jev 操作 Android App 并按顺序保存截图；`check_limits` 读图并调用只读 JADX 工具，核对时长限制的客户端实现。另有独立的[退出保护测试](check_exit/README.md)：可执行真机测试、扫描 APK 的潜在旁路，或只分析现有 APK（无需手机）。
 
 ## 一次运行整个流程（推荐）
 
@@ -19,7 +19,7 @@ cd /Users/xingyuchen/Desktop/MinorGuard/code
 
 顺序：校验/提取 APK → Jev 采集（卡住时大模型脱困）→ 自动准备对应服务器 JADX 工程 → 同一个分析模型读图、查代码、判断 → 最终简短报告。报告位于 `results/runs/运行编号/report.md`，旁边保留完整采集和分析记录；包含全流程耗时、采集状态、恢复次数、逐条结论和局限。失败、中断或需要用户验证时也输出报告，不把“流程结束”写成“App 合规”。采集未全完成但有页面时可继续做有限范围分析，最终标记 `partial`，不会把缺失部分算通过。
 
-自动服务器准备只在 `run_check` 中启用：`check_config.json` 的 `jadx.managed_root` 指向已部署的 MinorGuard 目录。按需同步本地 `jadx_runtime/` 源码并编译插件/独立解析器，备份原部署；只有源码、JVM 配置和 APK 都一致且真正就绪才复用，否则重载标记属于本项目的 JADX/MCP 会话。不动其他项目/用户进程。APK 按 SHA-256 命名上传，不覆盖旧版本。共享同一手机/JADX 时请勿并发运行多个 App。单用 `check_limits` 不部署或切换项目，但同样强制检查真正就绪。
+`run_check` 和退出保护的静态扫描会自动准备服务器：`check_config.json` 的 `jadx.managed_root` 指向已部署的 MinorGuard 目录。按需同步本地 `jadx_runtime/` 源码并编译插件/独立解析器，备份原部署；只有源码、JVM 配置和 APK 都一致且真正就绪才复用，否则重载标记属于本项目的 JADX/MCP 会话。不动其他项目/用户进程。APK 按 SHA-256 命名上传，不覆盖旧版本。共享同一手机/JADX 时请勿并发运行多个 App。单用 `check_limits` 不部署或切换项目，但同样强制检查真正就绪。
 
 需要事先配置 `.env`、SSH `safe`、Android 调试授权和测试账号。只唤醒屏幕，不自动解锁设备，不修改屏幕超时设置。split APK 当前明确报不支持，不漏掉分包后作完整结论。默认最多 60 步采集、80 张分析输入，仍受请求总大小限制；不静默丢弃截图。不会自动退出未成年人模式或恢复账号设置。
 

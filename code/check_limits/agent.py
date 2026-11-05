@@ -47,6 +47,25 @@ def parse_limitations(value):
     return [clean_text(text, "limitation", 2000) for text in value]
 
 
+def validate_code_references(references, evidence):
+    if not isinstance(references, list) or len(references) > 12:
+        raise CollectorError("code_evidence 必须为证据列表")
+    citations = []
+    for ref in references:
+        if not isinstance(ref, dict) or not isinstance(ref.get("id"), str):
+            raise CollectorError("代码引用格式错误")
+        record = evidence.get(ref["id"])
+        quote = clean_text(ref.get("quote"), "quote", 4000)
+        if not record or record["tool"] not in SOURCE_TOOLS:
+            raise CollectorError("结论只能引用已经读取的源码证据，而非搜索结果")
+        normalized = " ".join(quote.split())
+        if normalized not in " ".join(record["text"].split()) or not any(normalized in " ".join(page.split()) for page in record["seen"]):
+            raise CollectorError("代码引文不匹配 %s；请 read_evidence 重新读取该编号并逐字引用，不改变量名或加省略号；无法修正可写 unknown" % ref["id"])
+        citations.append({"id": ref["id"], "quote": quote, "file": record["file"],
+                          "tool": record["tool"], "location": record["arguments"]})
+    return citations
+
+
 def validate_findings(value, rules, evidence):
     """Integrity checks only, not a second semantic judge or score threshold."""
     if not isinstance(value, dict) or not isinstance(value.get("findings"), list):
@@ -65,23 +84,7 @@ def validate_findings(value, rules, evidence):
         verdict = item.get("verdict")
         if verdict not in ("supported", "contradicted", "unknown"):
             raise CollectorError("结论类型无效")
-        references = item.get("code_evidence")
-        if not isinstance(references, list) or len(references) > 12:
-            raise CollectorError("code_evidence 必须为证据列表")
-        citations = []
-        for ref in references:
-            if not isinstance(ref, dict) or not isinstance(ref.get("id"), str):
-                raise CollectorError("代码引用格式错误")
-            record = evidence.get(ref["id"])
-            quote = clean_text(ref.get("quote"), "quote", 4000)
-            if not record or record["tool"] not in SOURCE_TOOLS:
-                raise CollectorError("结论只能引用已经读取的源码证据，而非搜索结果")
-            # Whitespace normalization tolerates Java indentation, not paraphrase or ellipses.
-            normalized = " ".join(quote.split())
-            if normalized not in " ".join(record["text"].split()) or not any(normalized in " ".join(page.split()) for page in record["seen"]):
-                raise CollectorError("代码引文不匹配 %s；请 read_evidence 重新读取该编号并逐字引用，不改变量名或加省略号；无法修正可写 unknown" % ref["id"])
-            citations.append({"id": ref["id"], "quote": quote, "file": record["file"],
-                              "tool": record["tool"], "location": record["arguments"]})
+        citations = validate_code_references(item.get("code_evidence"), evidence)
         if verdict != "unknown" and not citations:
             raise CollectorError("代码支持/发现矛盾必须引用已读取的源码")
         findings.append({"rule_id": identity, "verdict": verdict,
@@ -233,8 +236,11 @@ class LimitsAgent:
                               "\n本轮规则：" + json.dumps(self.rules, ensure_ascii=False)})
         self.recorder.append({"event": "code_search_strategy", "strategy": "ui_anchor_then_expand",
                               "tracing": "bidirectional_with_leads", "model_call_limit": self.config["max_model_calls"], "dynamic_fallback": False})
+        return self._run_tools(FINAL_SCHEMA, "完成全部规则的静态核对，提交简短结论及真实代码引用。")
+
+    def _run_tools(self, schema, description, result_key="findings"):
         definitions = self.tools.definitions() + [{"type": "function", "function": {
-            "name": "submit_result", "description": "完成全部规则的静态核对，提交简短结论及真实代码引用。", "parameters": FINAL_SCHEMA}}]
+            "name": "submit_result", "description": description, "parameters": schema}}]
         while True:
             context_ending = self.context_chars() >= self.config["max_context_chars"]
             final_only = context_ending or self.tool_calls >= self.config["max_tool_calls"] or self.model_calls >= self.config["max_model_calls"] - 1
@@ -242,7 +248,7 @@ class LimitsAgent:
                 if context_ending:
                     self.recorder.append({"event": "context_budget_final_turn", "characters": self.context_chars(),
                                           "limit": self.config["max_context_chars"]})
-                self.messages.append({"role": "user", "content": "上下文或调用预算已进入收尾阶段，保留全部已有证据，仅提交最终结果：现在调用 submit_result，未查清的规则写 unknown，不再读取新代码。"})
+                self.messages.append({"role": "user", "content": "上下文或调用预算已进入收尾阶段。现在调用 submit_result，明确未查清的部分，不再读取新代码。"})
             message = self._ask(tools=definitions, final_only=final_only)
             calls = message.get("tool_calls", [])
             if not isinstance(calls, list):
@@ -272,7 +278,7 @@ class LimitsAgent:
                         if mixed_final:
                             raise CollectorError("submit_result 应单独提交，先读取工具结果再下结论")
                         final = self._finish(arguments, final_only)
-                        self.recorder.append({"event": "final_submitted", "time": now(), "findings": len(final["findings"])})
+                        self.recorder.append({"event": "final_submitted", "time": now(), result_key: len(final[result_key])})
                         return final
                     if final_only or self.tool_calls >= self.config["max_tool_calls"]:
                         raise CollectorError("工具预算已用完，请提交结果")
